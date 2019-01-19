@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+<button onClick="toast()">点击toast</button>
+<button onClick="openNativePage('test')">打开原生页面</button>
+<script>
+    ;(function() {
+      if (window.JSBridge) return;
+      var CUSTOM_PROTOCOL_SCHEME = 'zaihu';
+      var REGISTER_INVOKE = 'invoke';
+      var REGISTER_LISTEN = 'listen';
+      var uniqueId = 1;
+      var invokeCbMap = {};
+      var listenCbMap = {};
+      function createIframeCall(url) {
+        setTimeout(function() {
+          var iframe = document.createElement('iframe');
+          iframe.style.width = '1px';
+          iframe.style.height = '1px';
+          iframe.style.display = 'none';
+          iframe.src = url;
+          document.body.appendChild(iframe);
+          setTimeout(function() {
+              document.body.removeChild(iframe);
+          }, 100);
+        }, 0);
+      }
+      function callNative(type, funcName, data, cb) {
+        var cbId = '';
+        if (cb) {
+          cbId = 'cb_' + (uniqueId++) + '_' + new Date().getTime();
+          if (type === REGISTER_INVOKE) {
+            invokeCbMap[cbId] = cb;
+          } else {
+            listenCbMap[cbId] = cb;
+          }
+        }
+        var dataStr = '';
+        if (data) dataStr = encodeURIComponent(JSON.stringify(data));
+        var paramStr = CUSTOM_PROTOCOL_SCHEME + '://' + register_type + '?func=' + funcName + (cbId ? ('&cbId=' + cbId): '') + (data ? ('&data=' + dataStr): '');
+        createIframeCall(paramStr);
+      }
+      function _invoke(nativeFuncName, data, cb) {
+        callNative(REGISTER_INVOKE, nativeFuncName, data, cb);
+      }
+      function _listen(h5FuncName, data, cb) {
+        callNative(REGISTER_LISTEN, h5FuncName, data, cb);
+      }
+      // message: {
+      //   cbId  : "cb_(:id)_(:timeStamp)",      //回调函数的id
+      //   status: 0,                            //状态数据 (0:失败, 1:成功)
+      //   msg   : "ok",                         //反馈的消息
+      //   data  : {
+      //     //...                               //一些处理后的数据
+      //   }
+      // }
+      function _handlerFromNative(message) {
+        var data = message;
+        var cbId = data.cbId;
+        var cb = invokeCbMap[cbId] || listenCbMap[cbId];
+        if (cb) {
+          delete data.cbId && cb(data) && delete invokeCbMap[cbId];
+        }
+      }
+      var app;
+
+      app = {
+        invoke: _invoke,
+        listen: _listen,
+        _handlerFromNative,
+      };
+      window.JSBridge = app;
+  })()
+  </script>
+<script>
+    ;(function() {
+      window.JSBridge.showToast = function({ data }) {
+        return new Promise(resolve => {
+          window.JSBridge.invoke('showToast', data, resolve);
+        });
+      };
+      window.JSBridge.openNativePage = function({ data }) {
+        return new Promise(resolve => {
+          window.JSBridge.invoke('openNativePage', data, resolve);
+        });
+      };
+
+      window.JSBridge.onShare = function() {
+        return new Promise(resolve => {
+          window.JSBridge.on('onShare', data, resolve);
+        });
+      };
+    })();
+  </script>
+<script>
+    window.JSBridge.showToast({
+      data: { title: 1 },
+    }).then((data) => {
+      console.log('调用toast', data);
+    })
+    function toast() {
+      window.JSBridge.showToast({
+        data: { title: 1 },
+      }).then((data) => {
+        console.log('调用toast', data);
+      })
+    }
+
+    function openNativePage(pageName) {
+      window.JSBridge.openNativePage({
+        data: { pageName },
+      }).then((data) => {
+        console.log('打开成功', data);
+      })
+    }
+
+    window.JSBridge.onShare()
+      .then((data) => {
+        console.log('分享完成666', data);
+      });
+  </script>
+</body>
+</html>
